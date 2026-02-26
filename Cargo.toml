@@ -1,0 +1,22 @@
+[package]
+name = "lnbot"
+version = "0.1.0"
+edition = "2021"
+description = "Official Rust SDK for LnBot — Bitcoin for AI Agents. Send and receive sats over Lightning."
+license = "MIT"
+repository = "https://github.com/lnbotdev/rust-sdk"
+homepage = "https://ln.bot"
+documentation = "https://docs.rs/lnbot"
+readme = "README.md"
+keywords = ["lnbot", "lightning", "bitcoin", "payments", "bolt11"]
+categories = ["api-bindings", "cryptography::cryptocurrencies"]
+
+[dependencies]
+reqwest = { version = "0.12", features = ["json", "stream"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+futures-core = "0.3"
+futures-util = "0.3"
+async-stream = "0.3"
+urlencoding = "2"
