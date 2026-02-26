@@ -1,5 +1,5 @@
-use crate::client::LnBot;
-use crate::errors::{from_status, LnBotError};
+use crate::client::{check_status, LnBot};
+use crate::errors::LnBotError;
 use crate::types::*;
 use futures_core::Stream;
 use futures_util::StreamExt;
@@ -40,7 +40,7 @@ impl InvoicesResource<'_> {
     /// use futures_util::StreamExt;
     /// use lnbot::InvoiceEventType;
     ///
-    /// let mut stream = client.invoices().wait_for_settlement(1, None);
+    /// let mut stream = client.invoices().watch(1, None);
     /// while let Some(event) = stream.next().await {
     ///     let event = event?;
     ///     if event.event == InvoiceEventType::Settled {
@@ -50,7 +50,7 @@ impl InvoicesResource<'_> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn wait_for_settlement(
+    pub fn watch(
         &self,
         number: i32,
         timeout: Option<i32>,
@@ -66,12 +66,7 @@ impl InvoicesResource<'_> {
                 req = req.bearer_auth(key);
             }
 
-            let resp = req.send().await?;
-            let status = resp.status().as_u16();
-            if status >= 400 {
-                let body = resp.text().await.unwrap_or_default();
-                Err(from_status(status, body))?;
-            }
+            let resp = check_status(req.send().await?).await?;
 
             let mut event_type = String::new();
             let mut buffer = String::new();

@@ -183,6 +183,15 @@ impl LnBot {
     }
 }
 
+pub(crate) async fn check_status(resp: Response) -> Result<Response, LnBotError> {
+    let status = resp.status().as_u16();
+    if status >= 400 {
+        let body = resp.text().await.unwrap_or_default();
+        return Err(from_status(status, body));
+    }
+    Ok(resp)
+}
+
 async fn handle_json<T: DeserializeOwned>(resp: Response) -> Result<T, LnBotError> {
     let status = resp.status().as_u16();
     if status >= 400 {

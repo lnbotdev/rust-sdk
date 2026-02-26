@@ -67,7 +67,7 @@ println!("{}", invoice.bolt11);
 use futures_util::StreamExt;
 use lnbot::InvoiceEventType;
 
-let mut stream = client.invoices().wait_for_settlement(invoice.number, None);
+let mut stream = client.invoices().watch(invoice.number, None);
 while let Some(event) = stream.next().await {
     let event = event?;
     if event.event == InvoiceEventType::Settled {
@@ -125,7 +125,7 @@ let client = LnBot::new("key_...")
 - **Async-first** — built on `reqwest` + `tokio`
 - **Strongly typed** — every request/response is a Rust struct with `serde` derives
 - **Typed enums** — `InvoiceStatus`, `PaymentStatus`, `TransactionType` are real enums, not strings
-- **SSE streaming** — `wait_for_settlement` returns a `Stream` of typed events
+- **SSE streaming** — `watch` returns a `Stream` of typed events
 - **Typed errors** — `LnBotError` enum with `BadRequest`, `NotFound`, `Conflict` variants
 - **Forward-compatible** — `#[non_exhaustive]` and `#[serde(other)]` for safe API evolution
 
