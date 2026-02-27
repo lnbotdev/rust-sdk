@@ -101,6 +101,11 @@ impl LnBot {
         WebhooksResource { client: self }
     }
 
+    /// Access the real-time wallet event stream.
+    pub fn events(&self) -> EventsResource<'_> {
+        EventsResource { client: self }
+    }
+
     /// Access backup operations.
     pub fn backup(&self) -> BackupResource<'_> {
         BackupResource { client: self }

@@ -5,6 +5,7 @@ mod payments;
 mod addresses;
 mod transactions;
 mod webhooks;
+mod events;
 mod backup;
 mod restore;
 
@@ -15,5 +16,6 @@ pub use payments::PaymentsResource;
 pub use addresses::AddressesResource;
 pub use transactions::TransactionsResource;
 pub use webhooks::WebhooksResource;
+pub use events::EventsResource;
 pub use backup::BackupResource;
 pub use restore::RestoreResource;

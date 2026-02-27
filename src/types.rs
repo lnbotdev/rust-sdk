@@ -141,6 +141,7 @@ pub struct InvoiceResponse {
     pub bolt11: String,
     pub reference: Option<String>,
     pub memo: Option<String>,
+    pub preimage: Option<String>,
     pub tx_number: Option<i32>,
     pub created_at: Option<String>,
     pub settled_at: Option<String>,
@@ -366,9 +367,11 @@ pub struct PaymentResponse {
     pub status: PaymentStatus,
     pub amount: i64,
     pub max_fee: i64,
+    pub service_fee: i64,
     pub actual_fee: Option<i64>,
     pub address: String,
     pub reference: Option<String>,
+    pub preimage: Option<String>,
     pub tx_number: Option<i32>,
     pub failure_reason: Option<String>,
     pub created_at: Option<String>,
@@ -520,6 +523,20 @@ pub struct WebhookResponse {
     pub url: String,
     pub active: bool,
     pub created_at: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Wallet event stream
+// ---------------------------------------------------------------------------
+
+/// A real-time event from the wallet event stream.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub struct WalletEvent {
+    pub event: String,
+    pub created_at: String,
+    pub data: serde_json::Value,
 }
 
 // ---------------------------------------------------------------------------
