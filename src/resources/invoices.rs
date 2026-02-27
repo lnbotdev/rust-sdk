@@ -28,6 +28,26 @@ impl InvoicesResource<'_> {
             .await
     }
 
+    /// Creates an invoice for a specific wallet by its ID.
+    /// No authentication required. Rate limited by IP.
+    pub async fn create_for_wallet(
+        &self,
+        req: &CreateInvoiceForWalletRequest,
+    ) -> Result<AddressInvoiceResponse, LnBotError> {
+        self.client.post("/v1/invoices/for-wallet", Some(req)).await
+    }
+
+    /// Creates an invoice for the wallet owning the given Lightning address.
+    /// No authentication required. Rate limited by IP.
+    pub async fn create_for_address(
+        &self,
+        req: &CreateInvoiceForAddressRequest,
+    ) -> Result<AddressInvoiceResponse, LnBotError> {
+        self.client
+            .post("/v1/invoices/for-address", Some(req))
+            .await
+    }
+
     /// Returns a stream of real-time events for an invoice via Server-Sent Events.
     ///
     /// The stream yields [`InvoiceEvent`]s as they arrive. Use this to wait for

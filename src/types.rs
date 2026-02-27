@@ -147,6 +147,92 @@ pub struct InvoiceResponse {
     pub expires_at: Option<String>,
 }
 
+/// Parameters for creating an invoice for a specific wallet (unauthenticated).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateInvoiceForWalletRequest {
+    pub wallet_id: String,
+    pub amount: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reference: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
+}
+
+impl CreateInvoiceForWalletRequest {
+    /// Creates a new request to generate an invoice for the given wallet ID and amount.
+    pub fn new(wallet_id: impl Into<String>, amount: i64) -> Self {
+        Self {
+            wallet_id: wallet_id.into(),
+            amount,
+            reference: None,
+            comment: None,
+        }
+    }
+
+    /// Sets a reference for the invoice.
+    #[must_use]
+    pub fn reference(mut self, reference: impl Into<String>) -> Self {
+        self.reference = Some(reference.into());
+        self
+    }
+
+    /// Sets a comment visible to the recipient.
+    #[must_use]
+    pub fn comment(mut self, comment: impl Into<String>) -> Self {
+        self.comment = Some(comment.into());
+        self
+    }
+}
+
+/// Parameters for creating an invoice for a Lightning address (unauthenticated).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateInvoiceForAddressRequest {
+    pub address: String,
+    pub amount: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tag: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
+}
+
+impl CreateInvoiceForAddressRequest {
+    /// Creates a new request to generate an invoice for the given Lightning address and amount.
+    pub fn new(address: impl Into<String>, amount: i64) -> Self {
+        Self {
+            address: address.into(),
+            amount,
+            tag: None,
+            comment: None,
+        }
+    }
+
+    /// Sets the LNURL pay tag.
+    #[must_use]
+    pub fn tag(mut self, tag: impl Into<String>) -> Self {
+        self.tag = Some(tag.into());
+        self
+    }
+
+    /// Sets a comment visible to the recipient.
+    #[must_use]
+    pub fn comment(mut self, comment: impl Into<String>) -> Self {
+        self.comment = Some(comment.into());
+        self
+    }
+}
+
+/// An invoice created via wallet ID or Lightning address.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub struct AddressInvoiceResponse {
+    pub bolt11: String,
+    pub amount: i64,
+    pub expires_at: Option<String>,
+}
+
 /// Pagination parameters for list endpoints.
 #[derive(Debug, Clone, Default)]
 pub struct ListParams {
@@ -287,6 +373,33 @@ pub struct PaymentResponse {
     pub failure_reason: Option<String>,
     pub created_at: Option<String>,
     pub settled_at: Option<String>,
+}
+
+/// Type of a payment SSE event.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum PaymentEventType {
+    Settled,
+    Failed,
+    Unknown(String),
+}
+
+impl From<&str> for PaymentEventType {
+    fn from(s: &str) -> Self {
+        match s {
+            "settled" => Self::Settled,
+            "failed" => Self::Failed,
+            other => Self::Unknown(other.to_string()),
+        }
+    }
+}
+
+/// A real-time payment event from the SSE stream.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct PaymentEvent {
+    pub event: PaymentEventType,
+    pub data: PaymentResponse,
 }
 
 // ---------------------------------------------------------------------------
