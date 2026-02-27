@@ -95,6 +95,32 @@ println!("{} sats available", wallet.available);
 
 ---
 
+## L402 paywalls
+
+```rust
+use lnbot::{CreateL402ChallengeRequest, PayL402Request, VerifyL402Request};
+
+// Create a challenge (server side)
+let challenge = client.l402().create_challenge(&CreateL402ChallengeRequest {
+    amount: 100,
+    description: Some("API access".into()),
+    expiry_seconds: Some(3600),
+    caveats: None,
+}).await?;
+
+// Pay the challenge (client side)
+let result = client.l402().pay(&PayL402Request {
+    www_authenticate: challenge.www_authenticate,
+    max_fee: None, reference: None, wait: None, timeout: None,
+}).await?;
+
+// Verify a token (server side, stateless)
+let v = client.l402().verify(&VerifyL402Request {
+    authorization: result.authorization.unwrap(),
+}).await?;
+println!("{}", v.valid);
+```
+
 ## Error handling
 
 ```rust

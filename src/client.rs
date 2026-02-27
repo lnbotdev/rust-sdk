@@ -116,6 +116,11 @@ impl LnBot {
         RestoreResource { client: self }
     }
 
+    /// Access L402 paywall operations.
+    pub fn l402(&self) -> L402Resource<'_> {
+        L402Resource { client: self }
+    }
+
     pub(crate) fn auth(&self, req: RequestBuilder) -> RequestBuilder {
         let req = req.header("Accept", "application/json");
         match &self.api_key {

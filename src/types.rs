@@ -57,18 +57,6 @@ pub struct CreateWalletResponse {
 // API Keys
 // ---------------------------------------------------------------------------
 
-/// An API key's metadata (the actual key value is never returned after creation).
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[non_exhaustive]
-pub struct ApiKeyResponse {
-    pub id: String,
-    pub name: String,
-    pub hint: String,
-    pub created_at: Option<String>,
-    pub last_used_at: Option<String>,
-}
-
 /// Response from rotating an API key.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -618,4 +606,71 @@ pub struct RestorePasskeyCompleteResponse {
     pub name: String,
     pub primary_key: String,
     pub secondary_key: String,
+}
+
+// ---------------------------------------------------------------------------
+// L402
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateL402ChallengeRequest {
+    pub amount: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expiry_seconds: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub caveats: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct L402ChallengeResponse {
+    pub macaroon: String,
+    pub invoice: String,
+    pub payment_hash: String,
+    pub expires_at: String,
+    pub www_authenticate: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifyL402Request {
+    pub authorization: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifyL402Response {
+    pub valid: bool,
+    pub payment_hash: Option<String>,
+    pub caveats: Option<Vec<String>>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PayL402Request {
+    pub www_authenticate: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_fee: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reference: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wait: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeout: Option<i32>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct L402PayResponse {
+    pub authorization: Option<String>,
+    pub payment_hash: String,
+    pub preimage: Option<String>,
+    pub amount: i64,
+    pub fee: Option<i64>,
+    pub payment_number: i32,
+    pub status: String,
 }

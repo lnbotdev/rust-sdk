@@ -8,11 +8,6 @@ pub struct KeysResource<'a> {
 }
 
 impl KeysResource<'_> {
-    /// Lists all API keys for the current wallet.
-    pub async fn list(&self) -> Result<Vec<ApiKeyResponse>, LnBotError> {
-        self.client.get("/v1/keys").await
-    }
-
     /// Rotates the API key in the given slot (1 = primary, 2 = secondary).
     pub async fn rotate(&self, slot: i32) -> Result<RotateApiKeyResponse, LnBotError> {
         self.client

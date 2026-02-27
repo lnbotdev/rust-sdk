@@ -8,6 +8,7 @@ mod webhooks;
 mod events;
 mod backup;
 mod restore;
+mod l402;
 
 pub use wallets::WalletsResource;
 pub use keys::KeysResource;
@@ -19,3 +20,4 @@ pub use webhooks::WebhooksResource;
 pub use events::EventsResource;
 pub use backup::BackupResource;
 pub use restore::RestoreResource;
+pub use l402::L402Resource;
