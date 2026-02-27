@@ -8,6 +8,14 @@ pub enum LnBotError {
     #[error("Bad Request (400): {body}")]
     BadRequest { body: String },
 
+    /// The API key is missing or invalid (HTTP 401).
+    #[error("Unauthorized (401): {body}")]
+    Unauthorized { body: String },
+
+    /// The API key lacks permission for this operation (HTTP 403).
+    #[error("Forbidden (403): {body}")]
+    Forbidden { body: String },
+
     /// The requested resource was not found (HTTP 404).
     #[error("Not Found (404): {body}")]
     NotFound { body: String },
@@ -32,6 +40,8 @@ pub enum LnBotError {
 pub(crate) fn from_status(status: u16, body: String) -> LnBotError {
     match status {
         400 => LnBotError::BadRequest { body },
+        401 => LnBotError::Unauthorized { body },
+        403 => LnBotError::Forbidden { body },
         404 => LnBotError::NotFound { body },
         409 => LnBotError::Conflict { body },
         _ => LnBotError::Api { status, body },
