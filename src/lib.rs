@@ -12,8 +12,9 @@
 //! # async fn example() -> Result<(), lnbot::LnBotError> {
 //! use lnbot::{LnBot, CreateInvoiceRequest};
 //!
-//! let client = LnBot::new("key_...");
-//! let invoice = client.invoices().create(&CreateInvoiceRequest::new(1000)).await?;
+//! let client = LnBot::new("uk_...");
+//! let w = client.wallet("wal_...");
+//! let invoice = w.invoices().create(&CreateInvoiceRequest::new(1000)).await?;
 //! println!("{}", invoice.bolt11);
 //! # Ok(())
 //! # }
@@ -24,6 +25,6 @@ pub mod errors;
 pub mod resources;
 pub mod types;
 
-pub use client::LnBot;
+pub use client::{LnBot, Wallet};
 pub use errors::LnBotError;
 pub use types::*;

@@ -5,37 +5,19 @@ use futures_core::Stream;
 use futures_util::StreamExt;
 use std::pin::Pin;
 
-/// Real-time wallet event stream.
+/// Wallet-scoped real-time event stream.
 pub struct EventsResource<'a> {
     pub(crate) client: &'a LnBot,
+    pub(crate) prefix: &'a str,
 }
 
 impl EventsResource<'_> {
     /// Opens an SSE stream of all wallet events.
-    ///
-    /// Events: `invoice.created`, `invoice.settled`, `payment.created`,
-    /// `payment.settled`, `payment.failed`.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # async fn example(client: &lnbot::LnBot) -> Result<(), lnbot::LnBotError> {
-    /// use futures_util::StreamExt;
-    ///
-    /// let mut stream = client.events().stream();
-    /// while let Some(event) = stream.next().await {
-    ///     let event = event?;
-    ///     println!("{}: {:?}", event.event, event.data);
-    /// }
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn stream(
         &self,
     ) -> Pin<Box<dyn Stream<Item = Result<WalletEvent, LnBotError>> + Send + '_>> {
+        let url = format!("{}{}/events", self.client.base_url, self.prefix);
         Box::pin(async_stream::try_stream! {
-            let url = format!("{}/v1/events", self.client.base_url);
-
             let mut req = self.client.http.get(&url).header("Accept", "text/event-stream");
             if let Some(ref key) = self.client.api_key {
                 req = req.bearer_auth(key);

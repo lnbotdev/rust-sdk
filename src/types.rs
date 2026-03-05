@@ -4,6 +4,31 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 // ---------------------------------------------------------------------------
+// Account
+// ---------------------------------------------------------------------------
+
+/// Response from registering a new account.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub struct RegisterResponse {
+    pub user_id: String,
+    pub primary_key: String,
+    pub secondary_key: String,
+    pub recovery_passphrase: String,
+}
+
+/// Response from the `/v1/me` identity endpoint.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub struct MeResponse {
+    pub user_id: String,
+    pub key_name: Option<String>,
+    pub wallet_id: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
 // Wallet
 // ---------------------------------------------------------------------------
 
@@ -19,14 +44,6 @@ pub struct WalletResponse {
     pub available: i64,
 }
 
-/// Parameters for creating a new wallet.
-#[derive(Debug, Clone, Serialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct CreateWalletRequest {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-}
-
 /// Parameters for updating a wallet.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,17 +57,45 @@ impl UpdateWalletRequest {
     }
 }
 
-/// Response from creating a new wallet, including credentials.
+/// Response from creating a new wallet.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
 pub struct CreateWalletResponse {
     pub wallet_id: String,
-    pub primary_key: String,
-    pub secondary_key: String,
     pub name: String,
     pub address: String,
-    pub recovery_passphrase: String,
+}
+
+/// A wallet in the list returned by `/v1/wallets`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub struct WalletListItem {
+    pub wallet_id: String,
+    pub name: String,
+}
+
+// ---------------------------------------------------------------------------
+// Wallet Key
+// ---------------------------------------------------------------------------
+
+/// Response from creating or rotating a wallet key.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub struct WalletKeyResponse {
+    pub key: String,
+}
+
+/// Response from getting wallet key info.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub struct WalletKeyInfoResponse {
+    pub hint: String,
+    pub created_at: Option<String>,
+    pub last_used_at: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -149,7 +194,6 @@ pub struct CreateInvoiceForWalletRequest {
 }
 
 impl CreateInvoiceForWalletRequest {
-    /// Creates a new request to generate an invoice for the given wallet ID and amount.
     pub fn new(wallet_id: impl Into<String>, amount: i64) -> Self {
         Self {
             wallet_id: wallet_id.into(),
@@ -159,14 +203,12 @@ impl CreateInvoiceForWalletRequest {
         }
     }
 
-    /// Sets a reference for the invoice.
     #[must_use]
     pub fn reference(mut self, reference: impl Into<String>) -> Self {
         self.reference = Some(reference.into());
         self
     }
 
-    /// Sets a comment visible to the recipient.
     #[must_use]
     pub fn comment(mut self, comment: impl Into<String>) -> Self {
         self.comment = Some(comment.into());
@@ -187,7 +229,6 @@ pub struct CreateInvoiceForAddressRequest {
 }
 
 impl CreateInvoiceForAddressRequest {
-    /// Creates a new request to generate an invoice for the given Lightning address and amount.
     pub fn new(address: impl Into<String>, amount: i64) -> Self {
         Self {
             address: address.into(),
@@ -197,14 +238,12 @@ impl CreateInvoiceForAddressRequest {
         }
     }
 
-    /// Sets the LNURL pay tag.
     #[must_use]
     pub fn tag(mut self, tag: impl Into<String>) -> Self {
         self.tag = Some(tag.into());
         self
     }
 
-    /// Sets a comment visible to the recipient.
     #[must_use]
     pub fn comment(mut self, comment: impl Into<String>) -> Self {
         self.comment = Some(comment.into());
@@ -230,14 +269,12 @@ pub struct ListParams {
 }
 
 impl ListParams {
-    /// Sets the maximum number of results to return.
     #[must_use]
     pub fn limit(mut self, limit: i32) -> Self {
         self.limit = Some(limit);
         self
     }
 
-    /// Sets the cursor for pagination (return results after this number).
     #[must_use]
     pub fn after(mut self, after: i32) -> Self {
         self.after = Some(after);
@@ -305,8 +342,6 @@ pub struct CreatePaymentRequest {
 }
 
 impl CreatePaymentRequest {
-    /// Creates a new payment request to the given target
-    /// (bolt11 invoice, Lightning address, or LN URL).
     pub fn new(target: impl Into<String>) -> Self {
         Self {
             target: target.into(),
@@ -317,28 +352,24 @@ impl CreatePaymentRequest {
         }
     }
 
-    /// Sets the amount in sats (required for Lightning address / LN URL payments).
     #[must_use]
     pub fn amount(mut self, amount: i64) -> Self {
         self.amount = Some(amount);
         self
     }
 
-    /// Sets an idempotency key to prevent duplicate payments.
     #[must_use]
     pub fn idempotency_key(mut self, key: impl Into<String>) -> Self {
         self.idempotency_key = Some(key.into());
         self
     }
 
-    /// Sets the maximum routing fee in sats.
     #[must_use]
     pub fn max_fee(mut self, fee: i64) -> Self {
         self.max_fee = Some(fee);
         self
     }
 
-    /// Sets an external reference for the payment.
     #[must_use]
     pub fn reference(mut self, reference: impl Into<String>) -> Self {
         self.reference = Some(reference.into());
@@ -364,6 +395,18 @@ pub struct PaymentResponse {
     pub failure_reason: Option<String>,
     pub created_at: Option<String>,
     pub settled_at: Option<String>,
+}
+
+/// Response from resolving a payment target.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub struct ResolveTargetResponse {
+    pub target: String,
+    #[serde(rename = "type")]
+    pub target_type: String,
+    pub amount: Option<i64>,
+    pub description: Option<String>,
 }
 
 /// Type of a payment SSE event.

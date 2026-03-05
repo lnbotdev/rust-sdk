@@ -143,13 +143,6 @@ fn transfer_address_serializes_camel_case() {
 }
 
 #[test]
-fn create_wallet_request_skips_none_name() {
-    let req = CreateWalletRequest::default();
-    let json = serde_json::to_value(&req).unwrap();
-    assert!(json.get("name").is_none());
-}
-
-#[test]
 fn pay_l402_serializes_camel_case() {
     let req = PayL402Request {
         www_authenticate: "L402 mac:inv".into(),
@@ -179,6 +172,74 @@ fn wallet_response_deserializes_camel_case() {
     assert_eq!(w.balance, 1000);
     assert_eq!(w.on_hold, 100);
     assert_eq!(w.available, 900);
+}
+
+#[test]
+fn create_wallet_response_deserializes() {
+    let json = r#"{"walletId":"wal_1","name":"Bot","address":"a@ln.bot"}"#;
+    let w: CreateWalletResponse = serde_json::from_str(json).unwrap();
+    assert_eq!(w.wallet_id, "wal_1");
+    assert_eq!(w.name, "Bot");
+    assert_eq!(w.address, "a@ln.bot");
+}
+
+#[test]
+fn wallet_list_item_deserializes() {
+    let json = r#"{"walletId":"wal_1","name":"My Wallet"}"#;
+    let w: WalletListItem = serde_json::from_str(json).unwrap();
+    assert_eq!(w.wallet_id, "wal_1");
+    assert_eq!(w.name, "My Wallet");
+}
+
+#[test]
+fn register_response_deserializes() {
+    let json = r#"{"userId":"u1","primaryKey":"uk_1","secondaryKey":"uk_2","recoveryPassphrase":"words"}"#;
+    let r: RegisterResponse = serde_json::from_str(json).unwrap();
+    assert_eq!(r.user_id, "u1");
+    assert_eq!(r.primary_key, "uk_1");
+    assert_eq!(r.recovery_passphrase, "words");
+}
+
+#[test]
+fn me_response_deserializes() {
+    let json = r#"{"userId":"u1","keyName":"primary","walletId":null}"#;
+    let m: MeResponse = serde_json::from_str(json).unwrap();
+    assert_eq!(m.user_id, "u1");
+    assert_eq!(m.key_name.as_deref(), Some("primary"));
+    assert!(m.wallet_id.is_none());
+}
+
+#[test]
+fn me_response_minimal() {
+    let json = r#"{"userId":"u1"}"#;
+    let m: MeResponse = serde_json::from_str(json).unwrap();
+    assert_eq!(m.user_id, "u1");
+    assert!(m.key_name.is_none());
+}
+
+#[test]
+fn wallet_key_response_deserializes() {
+    let json = r#"{"key":"wk_abc"}"#;
+    let r: WalletKeyResponse = serde_json::from_str(json).unwrap();
+    assert_eq!(r.key, "wk_abc");
+}
+
+#[test]
+fn wallet_key_info_response_deserializes() {
+    let json = r#"{"hint":"wk_abc...xyz","createdAt":"2024-01-01T00:00:00Z","lastUsedAt":null}"#;
+    let r: WalletKeyInfoResponse = serde_json::from_str(json).unwrap();
+    assert_eq!(r.hint, "wk_abc...xyz");
+    assert_eq!(r.created_at.as_deref(), Some("2024-01-01T00:00:00Z"));
+    assert!(r.last_used_at.is_none());
+}
+
+#[test]
+fn resolve_target_response_deserializes() {
+    let json = r#"{"target":"user@ln.bot","type":"lightning_address","amount":null,"description":null}"#;
+    let r: ResolveTargetResponse = serde_json::from_str(json).unwrap();
+    assert_eq!(r.target, "user@ln.bot");
+    assert_eq!(r.target_type, "lightning_address");
+    assert!(r.amount.is_none());
 }
 
 #[test]
@@ -317,36 +378,49 @@ fn payment_event_type_from_str() {
 
 #[test]
 fn error_display_bad_request() {
-    let e = LnBotError::BadRequest { body: "invalid".into() };
+    let e = LnBotError::BadRequest {
+        body: "invalid".into(),
+    };
     assert_eq!(e.to_string(), "Bad Request (400): invalid");
 }
 
 #[test]
 fn error_display_unauthorized() {
-    let e = LnBotError::Unauthorized { body: "no key".into() };
+    let e = LnBotError::Unauthorized {
+        body: "no key".into(),
+    };
     assert_eq!(e.to_string(), "Unauthorized (401): no key");
 }
 
 #[test]
 fn error_display_forbidden() {
-    let e = LnBotError::Forbidden { body: "denied".into() };
+    let e = LnBotError::Forbidden {
+        body: "denied".into(),
+    };
     assert_eq!(e.to_string(), "Forbidden (403): denied");
 }
 
 #[test]
 fn error_display_not_found() {
-    let e = LnBotError::NotFound { body: "missing".into() };
+    let e = LnBotError::NotFound {
+        body: "missing".into(),
+    };
     assert_eq!(e.to_string(), "Not Found (404): missing");
 }
 
 #[test]
 fn error_display_conflict() {
-    let e = LnBotError::Conflict { body: "exists".into() };
+    let e = LnBotError::Conflict {
+        body: "exists".into(),
+    };
     assert_eq!(e.to_string(), "Conflict (409): exists");
 }
 
 #[test]
 fn error_display_api() {
-    let e = LnBotError::Api { status: 503, body: "unavailable".into() };
+    let e = LnBotError::Api {
+        status: 503,
+        body: "unavailable".into(),
+    };
     assert_eq!(e.to_string(), "API error (HTTP 503): unavailable");
 }

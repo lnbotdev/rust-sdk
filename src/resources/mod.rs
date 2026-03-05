@@ -1,4 +1,5 @@
 mod wallets;
+mod wallet_key;
 mod keys;
 mod invoices;
 mod payments;
@@ -11,8 +12,9 @@ mod restore;
 mod l402;
 
 pub use wallets::WalletsResource;
+pub use wallet_key::WalletKeyResource;
 pub use keys::KeysResource;
-pub use invoices::InvoicesResource;
+pub use invoices::{InvoicesResource, PublicInvoicesResource};
 pub use payments::PaymentsResource;
 pub use addresses::AddressesResource;
 pub use transactions::TransactionsResource;
