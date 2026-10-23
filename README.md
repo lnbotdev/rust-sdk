@@ -83,6 +83,8 @@ while let Some(event) = stream.next().await {
 }
 ```
 
+An `expired` event is not always final: an invoice paid just before it expired can still turn `settled` shortly after. Before giving up on it, check again with `w.invoices().get(invoice.number)`, or keep listening for `invoice.settled` on the wallet event stream (`w.events().stream()`) or a webhook.
+
 ### Send sats
 
 ```rust
@@ -93,12 +95,55 @@ w.payments().create(
 ).await?;
 ```
 
+Leave `max_fee` unset. The server caps the network fee (Spark's 0.25% plus Lightning routing) at 1% of the amount, minimum 20 sats, and holds only the fee estimate plus a small buffer while the payment is in flight. On success the wallet is debited `amount + actual_fee + service_fee`, where `service_fee` is 0.25% (minimum 1 sat). Both fees are 0 between ln.bot wallets. Set `.max_fee(n)` only to allow a higher fee: it accepts 1 up to the larger of 10,000 sats and 5% of the amount.
+
+A payment can stay `pending` for a while because it is retried automatically. It ends up `settled` or `failed`: failed with `Invoice expired before it could be paid.` if the invoice expires first, otherwise within 24 hours at most. A failing payment can also stay `processing` a few seconds before it turns `failed`. Use `w.payments().watch(number, None)` or the wallet event stream to follow it.
+
 ### Check balance
 
 ```rust
 let info = w.get().await?;
 println!("{} sats available", info.available);
 ```
+
+---
+
+## Pricing a payment
+
+`resolve` and `resolve_with_amount` look up a target and price the payment without sending or holding anything.
+
+### Show fees before paying
+
+```rust
+let quote = w.payments().resolve_with_amount("alice@ln.bot", 5_000).await?;
+if let (Some(fee), Some(service), Some(total)) =
+    (quote.network_fee_estimate, quote.service_fee, quote.total)
+{
+    println!("network fee ~{fee} sats + service fee {service} sats = {total} sats");
+}
+if let Some(warning) = &quote.fee_warning {
+    eprintln!("{warning}");
+}
+```
+
+A BOLT11 invoice already carries its amount, so `w.payments().resolve(bolt11)` prices it. Pricing a Lightning address or LNURL requests an invoice from the recipient, so it is slower: call it once the amount is settled, not on every keystroke. When `fee_warning` is set, creating the payment without `max_fee` would be rejected because the fee is unusually high.
+
+### Send everything
+
+```rust
+use lnbot::CreatePaymentRequest;
+
+let quote = w.payments().resolve("alice@ln.bot").await?;
+if let Some(amount) = quote.max_sendable.filter(|&a| a > 0) {
+    w.payments().create(
+        &CreatePaymentRequest::new("alice@ln.bot").amount(amount),
+    ).await?;
+}
+```
+
+Resolved without an amount, a Lightning address or LNURL returns `max_sendable`: the most this wallet can send there now, after fees. Pay that amount without `max_fee`, since it was computed with the default fee cap. It is 0 when the balance can't cover the recipient's minimum.
+
+Both calls return `LnBotError::BadRequest` when the target can't be paid. The body is `{ "error": "..." }`, plus `min` and `max` when the amount is outside the recipient's range. An unknown ln.bot address gives `Recipient not found.` and the wallet's own address gives `Cannot transfer to yourself.`
 
 ---
 

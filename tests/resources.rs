@@ -406,13 +406,14 @@ async fn payments_resolve() {
     let mut server = mockito::Server::new_async().await;
     let mock = server
         .mock("GET", "/v1/wallets/wal_1/payments/resolve")
-        .match_query(mockito::Matcher::UrlEncoded(
-            "target".into(),
-            "user@ln.bot".into(),
-        ))
+        .match_query(mockito::Matcher::AllOf(vec![
+            mockito::Matcher::UrlEncoded("target".into(), "user@ln.bot".into()),
+            // Only the target is sent: no amount parameter.
+            mockito::Matcher::Regex("^target=[^&]*$".into()),
+        ]))
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(r#"{"target":"user@ln.bot","type":"lightning_address","amount":null,"description":null}"#)
+        .with_body(r#"{"type":"lightning_address","min":1,"max":1000000000,"fixed":false,"amount":null,"internal":false,"networkFeeEstimate":null,"serviceFee":null,"maxFee":null,"total":null,"maxSendable":49750,"feeWarning":null}"#)
         .create_async()
         .await;
 
@@ -423,8 +424,41 @@ async fn payments_resolve() {
         .resolve("user@ln.bot")
         .await
         .unwrap();
-    assert_eq!(resp.target, "user@ln.bot");
     assert_eq!(resp.target_type, "lightning_address");
+    assert!(resp.amount.is_none());
+    assert!(resp.total.is_none());
+    assert_eq!(resp.max_sendable, Some(49750));
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn payments_resolve_with_amount() {
+    let mut server = mockito::Server::new_async().await;
+    let mock = server
+        .mock("GET", "/v1/wallets/wal_1/payments/resolve")
+        .match_query(mockito::Matcher::AllOf(vec![
+            mockito::Matcher::UrlEncoded("target".into(), "user@ln.bot".into()),
+            mockito::Matcher::UrlEncoded("amount".into(), "10000".into()),
+        ]))
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"type":"lightning_address","min":1,"max":1000000000,"fixed":false,"amount":10000,"internal":false,"networkFeeEstimate":27,"serviceFee":25,"maxFee":31,"total":10052,"maxSendable":null,"feeWarning":null}"#)
+        .create_async()
+        .await;
+
+    let client = LnBot::new("key_test").with_base_url(server.url());
+    let resp = client
+        .wallet("wal_1")
+        .payments()
+        .resolve_with_amount("user@ln.bot", 10000)
+        .await
+        .unwrap();
+    assert_eq!(resp.amount, Some(10000));
+    assert_eq!(resp.network_fee_estimate, Some(27));
+    assert_eq!(resp.service_fee, Some(25));
+    assert_eq!(resp.max_fee, Some(31));
+    assert_eq!(resp.total, Some(10052));
+    assert!(resp.max_sendable.is_none());
     mock.assert_async().await;
 }
 

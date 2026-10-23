@@ -234,12 +234,72 @@ fn wallet_key_info_response_deserializes() {
 }
 
 #[test]
-fn resolve_target_response_deserializes() {
-    let json = r#"{"target":"user@ln.bot","type":"lightning_address","amount":null,"description":null}"#;
+fn resolve_target_response_deserializes_all_fields() {
+    let json = r#"{
+        "type":"bolt11","min":null,"max":null,"fixed":true,"amount":250000,
+        "internal":false,"networkFeeEstimate":700,"serviceFee":625,"maxFee":805,
+        "total":251325,"maxSendable":null,"feeWarning":null
+    }"#;
     let r: ResolveTargetResponse = serde_json::from_str(json).unwrap();
-    assert_eq!(r.target, "user@ln.bot");
+    assert_eq!(r.target_type, "bolt11");
+    assert!(r.min.is_none());
+    assert!(r.max.is_none());
+    assert!(r.fixed);
+    assert_eq!(r.amount, Some(250000));
+    assert!(!r.internal);
+    assert_eq!(r.network_fee_estimate, Some(700));
+    assert_eq!(r.service_fee, Some(625));
+    assert_eq!(r.max_fee, Some(805));
+    assert_eq!(r.total, Some(251325));
+    assert!(r.max_sendable.is_none());
+    assert!(r.fee_warning.is_none());
+}
+
+#[test]
+fn resolve_target_response_lightning_address_without_amount() {
+    let json = r#"{
+        "type":"lightning_address","min":1,"max":1000000000,"fixed":false,"amount":null,
+        "internal":false,"networkFeeEstimate":null,"serviceFee":null,"maxFee":null,
+        "total":null,"maxSendable":49750,"feeWarning":null
+    }"#;
+    let r: ResolveTargetResponse = serde_json::from_str(json).unwrap();
     assert_eq!(r.target_type, "lightning_address");
+    assert_eq!(r.min, Some(1));
+    assert_eq!(r.max, Some(1000000000));
+    assert!(!r.fixed);
     assert!(r.amount.is_none());
+    assert!(r.network_fee_estimate.is_none());
+    assert!(r.service_fee.is_none());
+    assert!(r.max_fee.is_none());
+    assert!(r.total.is_none());
+    assert_eq!(r.max_sendable, Some(49750));
+}
+
+#[test]
+fn resolve_target_response_fee_warning() {
+    let json = r#"{
+        "type":"bolt11","min":null,"max":null,"fixed":true,"amount":1000,
+        "internal":false,"networkFeeEstimate":150,"serviceFee":3,"maxFee":null,
+        "total":1153,"maxSendable":null,
+        "feeWarning":"Network fee estimate (150 sats) is above the default limit for this amount (20 sats). Set maxFee to allow a higher fee."
+    }"#;
+    let r: ResolveTargetResponse = serde_json::from_str(json).unwrap();
+    assert!(r.max_fee.is_none());
+    assert!(r.fee_warning.is_some());
+}
+
+#[test]
+#[allow(deprecated)]
+fn resolve_target_response_legacy_fields_default() {
+    let json = r#"{
+        "type":"lightning_address","min":1,"max":1000,"fixed":false,"amount":null,
+        "internal":true,"networkFeeEstimate":null,"serviceFee":null,"maxFee":null,
+        "total":null,"maxSendable":500,"feeWarning":null
+    }"#;
+    let r: ResolveTargetResponse = serde_json::from_str(json).unwrap();
+    assert!(r.internal);
+    assert_eq!(r.target, "");
+    assert!(r.description.is_none());
 }
 
 #[test]

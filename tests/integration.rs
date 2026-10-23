@@ -183,12 +183,35 @@ async fn payments_resolve() {
     let c = client();
     let w = c.wallet(wallet_id());
 
-    // Get a lightning address for this wallet
+    // Resolve the address of another wallet on ln.bot: an internal transfer
+    let other = c.wallets().create().await.unwrap();
+
+    // Without an amount: nothing to price, but maxSendable is set
+    let resolved = w.payments().resolve(&other.address).await.unwrap();
+    assert_eq!(resolved.target_type, "lightning_address");
+    assert!(resolved.internal);
+    assert!(resolved.amount.is_none());
+    assert!(resolved.total.is_none());
+    assert!(resolved.max_sendable.is_some());
+
+    // With an amount: internal transfers have no network or service fee
+    let priced = w
+        .payments()
+        .resolve_with_amount(&other.address, 1)
+        .await
+        .unwrap();
+    assert!(priced.internal);
+    assert_eq!(priced.amount, Some(1));
+    assert_eq!(priced.network_fee_estimate, Some(0));
+    assert_eq!(priced.service_fee, Some(0));
+    assert_eq!(priced.total, Some(1));
+    assert!(priced.max_sendable.is_none());
+
+    // Resolving this wallet's own address is rejected
     let addrs = w.addresses().list().await.unwrap();
     if let Some(addr) = addrs.first() {
-        let resolved = w.payments().resolve(&addr.address).await.unwrap();
-        assert_eq!(resolved.target, addr.address);
-        assert!(!resolved.target_type.is_empty());
+        let err = w.payments().resolve(&addr.address).await.unwrap_err();
+        assert!(matches!(err, LnBotError::BadRequest { .. }));
     }
 }
 

@@ -335,6 +335,14 @@ pub struct CreatePaymentRequest {
     pub amount: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub idempotency_key: Option<String>,
+    /// Maximum network fee in sats: Spark's fee (0.25%) plus Lightning routing.
+    ///
+    /// Leave this unset unless you need a different cap. The server then uses
+    /// its default of 1% of the amount, minimum 20 sats. When set, it must be
+    /// between 1 and the larger of 10,000 sats and 5% of the amount. The fee is
+    /// quoted when the payment is created: a quote above the cap rejects the
+    /// payment with a 400, and only the quote plus a small buffer is held while
+    /// the payment is in flight. Ignored for internal transfers.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_fee: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -364,6 +372,8 @@ impl CreatePaymentRequest {
         self
     }
 
+    /// Sets the maximum network fee in sats. Optional: see
+    /// [`max_fee`](CreatePaymentRequest::max_fee) for the default and limits.
     #[must_use]
     pub fn max_fee(mut self, fee: i64) -> Self {
         self.max_fee = Some(fee);
@@ -378,6 +388,9 @@ impl CreatePaymentRequest {
 }
 
 /// A payment returned by the API.
+///
+/// When the payment settles, the wallet is debited
+/// `amount + actual_fee + service_fee`.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
@@ -385,8 +398,14 @@ pub struct PaymentResponse {
     pub number: i32,
     pub status: PaymentStatus,
     pub amount: i64,
+    /// Network fee reserved for this payment in sats: the fee quote plus a
+    /// small buffer, or the cap when no quote was available. The unused part
+    /// is released at settlement.
     pub max_fee: i64,
+    /// Service fee in sats: 0.25%, minimum 1 sat. 0 for internal transfers.
     pub service_fee: i64,
+    /// Network fee actually charged in sats (Spark's fee plus routing).
+    /// `None` until the payment settles.
     pub actual_fee: Option<i64>,
     pub address: String,
     pub reference: Option<String>,
@@ -397,15 +416,56 @@ pub struct PaymentResponse {
     pub settled_at: Option<String>,
 }
 
-/// Response from resolving a payment target.
+/// Response from resolving and pricing a payment target.
+///
+/// The fee fields are only filled in when there is an amount to price: the
+/// invoice amount for a BOLT11 invoice, or the amount passed to
+/// [`resolve_with_amount`](crate::resources::PaymentsResource::resolve_with_amount).
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
 pub struct ResolveTargetResponse {
+    /// Not returned by the API. Always empty.
+    #[deprecated(since = "1.1.0", note = "not returned by the API; always empty")]
+    #[serde(default)]
     pub target: String,
+    /// Target type: `lightning_address`, `lnurl` or `bolt11`.
     #[serde(rename = "type")]
     pub target_type: String,
+    /// Minimum accepted amount in sats. `None` for BOLT11 invoices.
+    pub min: Option<i64>,
+    /// Maximum accepted amount in sats. `None` for BOLT11 invoices.
+    pub max: Option<i64>,
+    /// True if the recipient expects a fixed amount.
+    pub fixed: bool,
+    /// The amount priced in sats: the invoice amount for a BOLT11 invoice,
+    /// otherwise the amount passed. `None` when there is no amount.
     pub amount: Option<i64>,
+    /// True when the recipient is a wallet on ln.bot: a free internal transfer.
+    pub internal: bool,
+    /// Estimated network fee in sats (Spark's 0.25% plus routing). `None`
+    /// without an amount or when no estimate is available. 0 for internal
+    /// transfers.
+    pub network_fee_estimate: Option<i64>,
+    /// Service fee in sats: 0.25%, minimum 1 sat. 0 for internal transfers.
+    /// `None` without an amount.
+    pub service_fee: Option<i64>,
+    /// Network fee that would be held if the payment is created without
+    /// `max_fee`. `None` without an amount, or when `fee_warning` is set.
+    pub max_fee: Option<i64>,
+    /// Expected total cost in sats: `amount + network_fee_estimate + service_fee`.
+    /// `None` without an amount.
+    pub total: Option<i64>,
+    /// For a Lightning address or LNURL resolved without an amount: the most
+    /// this wallet can send there now, after fees. 0 if the wallet can't cover
+    /// the recipient's minimum. `None` otherwise.
+    pub max_sendable: Option<i64>,
+    /// Set when creating the payment without `max_fee` would be rejected
+    /// because the fee is unusually high. The response is still a 200.
+    pub fee_warning: Option<String>,
+    /// Not returned by the API. Always `None`.
+    #[deprecated(since = "1.1.0", note = "not returned by the API; always None")]
+    #[serde(default)]
     pub description: Option<String>,
 }
 
@@ -696,6 +756,10 @@ pub struct VerifyL402Response {
 #[serde(rename_all = "camelCase")]
 pub struct PayL402Request {
     pub www_authenticate: String,
+    /// Maximum network fee in sats (Spark's fee plus Lightning routing).
+    /// Leave it `None` to use the server default of 1% of the amount, minimum
+    /// 20 sats. Same meaning and limits as
+    /// [`CreatePaymentRequest::max_fee`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_fee: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -713,6 +777,8 @@ pub struct L402PayResponse {
     pub payment_hash: String,
     pub preimage: Option<String>,
     pub amount: i64,
+    /// Network fee actually charged in sats (Spark's fee plus routing).
+    /// `None` until the payment settles.
     pub fee: Option<i64>,
     pub payment_number: i32,
     pub status: String,

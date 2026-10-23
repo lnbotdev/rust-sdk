@@ -13,6 +13,11 @@ pub struct PaymentsResource<'a> {
 
 impl PaymentsResource<'_> {
     /// Creates a new outgoing payment.
+    ///
+    /// Leave [`max_fee`](CreatePaymentRequest::max_fee) unset to use the
+    /// server's default network fee cap. Use
+    /// [`resolve_with_amount`](Self::resolve_with_amount) first to show the
+    /// fees before paying.
     pub async fn create(&self, req: &CreatePaymentRequest) -> Result<PaymentResponse, LnBotError> {
         self.client
             .post(&format!("{}/payments", self.prefix), Some(req))
@@ -40,12 +45,42 @@ impl PaymentsResource<'_> {
             .await
     }
 
-    /// Resolves a payment target (bolt11, lightning address, LNURL).
+    /// Resolves a payment target (bolt11, lightning address, LNURL) without
+    /// creating a payment.
+    ///
+    /// A BOLT11 invoice with an amount is priced at that amount. A Lightning
+    /// address or LNURL has no amount to price, so it returns
+    /// [`max_sendable`](ResolveTargetResponse::max_sendable) instead: the most
+    /// this wallet can send there now. Use
+    /// [`resolve_with_amount`](Self::resolve_with_amount) to price a specific
+    /// amount.
     pub async fn resolve(&self, target: &str) -> Result<ResolveTargetResponse, LnBotError> {
         self.client
             .get_with_query(
                 &format!("{}/payments/resolve", self.prefix),
                 &[("target", target)],
+            )
+            .await
+    }
+
+    /// Resolves a payment target and prices a payment of `amount` sats to it,
+    /// without creating a payment.
+    ///
+    /// The response includes the network fee estimate, the service fee and
+    /// the total. For a BOLT11 invoice, `amount` must equal the invoice
+    /// amount. Pricing a Lightning address or LNURL requests an invoice from
+    /// the recipient, so it is slower: call it once the amount is settled,
+    /// not on every keystroke.
+    pub async fn resolve_with_amount(
+        &self,
+        target: &str,
+        amount: i64,
+    ) -> Result<ResolveTargetResponse, LnBotError> {
+        let amount = amount.to_string();
+        self.client
+            .get_with_query(
+                &format!("{}/payments/resolve", self.prefix),
+                &[("target", target), ("amount", &amount)],
             )
             .await
     }
