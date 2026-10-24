@@ -85,6 +85,10 @@ while let Some(event) = stream.next().await {
 
 An `expired` event is not always final: an invoice paid just before it expired can still turn `settled` shortly after. Before giving up on it, check again with `w.invoices().get(invoice.number)`, or keep listening for `invoice.settled` on the wallet event stream (`w.events().stream()`) or a webhook.
 
+When the wait runs out first (the `timeout` argument, default 60 seconds, max 300), the stream yields a `Timeout` event whose `data` is the current state, then ends: read it again or watch again. `payments().watch` works the same way, with `Settled`, `Failed` or `Timeout`.
+
+Event and webhook payloads use snake_case keys on the wire (`max_fee`, `created_at`). The SDK converts event payloads to the REST field names, so the `data` of a `w.events().stream()` event decodes with `serde_json::from_value` into `InvoiceResponse` or `PaymentResponse`; webhook bodies are not parsed by the SDK and keep the snake_case keys.
+
 ### Send sats
 
 ```rust

@@ -1,5 +1,6 @@
 use crate::client::{check_status, LnBot};
 use crate::errors::LnBotError;
+use crate::sse;
 use crate::types::WalletEvent;
 use futures_core::Stream;
 use futures_util::StreamExt;
@@ -39,7 +40,7 @@ impl EventsResource<'_> {
                     if let Some(value) = line.strip_prefix("data:") {
                         let raw = value.trim();
                         if !raw.is_empty() {
-                            let event: WalletEvent = serde_json::from_str(raw)?;
+                            let event: WalletEvent = sse::decode(raw)?;
                             yield event;
                         }
                     }

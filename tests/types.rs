@@ -416,6 +416,7 @@ fn transaction_type_unknown_falls_back() {
 fn invoice_event_type_from_str() {
     assert_eq!(InvoiceEventType::from("settled"), InvoiceEventType::Settled);
     assert_eq!(InvoiceEventType::from("expired"), InvoiceEventType::Expired);
+    assert_eq!(InvoiceEventType::from("timeout"), InvoiceEventType::Timeout);
     assert_eq!(
         InvoiceEventType::from("new_event"),
         InvoiceEventType::Unknown("new_event".to_string()),
@@ -426,6 +427,7 @@ fn invoice_event_type_from_str() {
 fn payment_event_type_from_str() {
     assert_eq!(PaymentEventType::from("settled"), PaymentEventType::Settled);
     assert_eq!(PaymentEventType::from("failed"), PaymentEventType::Failed);
+    assert_eq!(PaymentEventType::from("timeout"), PaymentEventType::Timeout);
     assert_eq!(
         PaymentEventType::from("new_event"),
         PaymentEventType::Unknown("new_event".to_string()),

@@ -1,5 +1,6 @@
 use crate::client::{check_status, LnBot};
 use crate::errors::LnBotError;
+use crate::sse;
 use crate::types::*;
 use futures_core::Stream;
 use futures_util::StreamExt;
@@ -86,6 +87,12 @@ impl PaymentsResource<'_> {
     }
 
     /// Returns a stream of real-time events for a payment via Server-Sent Events.
+    ///
+    /// The server sends one event and closes the stream:
+    /// [`Settled`](PaymentEventType::Settled) or
+    /// [`Failed`](PaymentEventType::Failed), or
+    /// [`Timeout`](PaymentEventType::Timeout) with the payment's current state
+    /// when `timeout` seconds pass first (default 60, maximum 300).
     pub fn watch(
         &self,
         number: i32,
@@ -139,7 +146,7 @@ impl PaymentsResource<'_> {
                     } else if let Some(value) = line.strip_prefix("data:") {
                         let raw = value.trim();
                         if !raw.is_empty() && !event_type.is_empty() {
-                            let data: PaymentResponse = serde_json::from_str(raw)?;
+                            let data: PaymentResponse = sse::decode(raw)?;
                             yield PaymentEvent {
                                 event: PaymentEventType::from(event_type.as_str()),
                                 data,

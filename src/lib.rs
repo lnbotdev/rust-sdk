@@ -23,6 +23,7 @@
 pub mod client;
 pub mod errors;
 pub mod resources;
+mod sse;
 pub mod types;
 
 pub use client::{LnBot, Wallet};

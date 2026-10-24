@@ -1,5 +1,6 @@
 use crate::client::{check_status, LnBot};
 use crate::errors::LnBotError;
+use crate::sse;
 use crate::types::*;
 use futures_core::Stream;
 use futures_util::StreamExt;
@@ -41,6 +42,12 @@ impl InvoicesResource<'_> {
     }
 
     /// Returns a stream of real-time events for an invoice via Server-Sent Events.
+    ///
+    /// The server sends one event and closes the stream:
+    /// [`Settled`](InvoiceEventType::Settled) or
+    /// [`Expired`](InvoiceEventType::Expired), or
+    /// [`Timeout`](InvoiceEventType::Timeout) with the invoice's current state
+    /// when `timeout` seconds pass first (default 60, maximum 300).
     pub fn watch(
         &self,
         number: i32,
@@ -94,7 +101,7 @@ impl InvoicesResource<'_> {
                     } else if let Some(value) = line.strip_prefix("data:") {
                         let raw = value.trim();
                         if !raw.is_empty() && !event_type.is_empty() {
-                            let data: InvoiceResponse = serde_json::from_str(raw)?;
+                            let data: InvoiceResponse = sse::decode(raw)?;
                             yield InvoiceEvent {
                                 event: InvoiceEventType::from(event_type.as_str()),
                                 data,

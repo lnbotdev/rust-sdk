@@ -288,6 +288,9 @@ impl ListParams {
 pub enum InvoiceEventType {
     Settled,
     Expired,
+    /// The wait ran out before the invoice settled or expired. `data` is the
+    /// invoice's current state: read it again or watch again.
+    Timeout,
     Unknown(String),
 }
 
@@ -296,6 +299,7 @@ impl From<&str> for InvoiceEventType {
         match s {
             "settled" => Self::Settled,
             "expired" => Self::Expired,
+            "timeout" => Self::Timeout,
             other => Self::Unknown(other.to_string()),
         }
     }
@@ -475,6 +479,10 @@ pub struct ResolveTargetResponse {
 pub enum PaymentEventType {
     Settled,
     Failed,
+    /// The wait ran out before the payment settled or failed. `data` is the
+    /// payment's current state, typically `pending` or `processing`: read it
+    /// again or watch again.
+    Timeout,
     Unknown(String),
 }
 
@@ -483,6 +491,7 @@ impl From<&str> for PaymentEventType {
         match s {
             "settled" => Self::Settled,
             "failed" => Self::Failed,
+            "timeout" => Self::Timeout,
             other => Self::Unknown(other.to_string()),
         }
     }
@@ -621,6 +630,14 @@ pub struct WebhookResponse {
 // ---------------------------------------------------------------------------
 
 /// A real-time event from the wallet event stream.
+///
+/// `event` is `invoice.created`, `invoice.settled`, `payment.created`,
+/// `payment.settled` or `payment.failed`. `data` holds the invoice or payment
+/// with the same camelCase keys as REST responses (the SDK converts the
+/// snake_case keys sent on the wire), so it decodes with
+/// `serde_json::from_value` into [`InvoiceResponse`] or [`PaymentResponse`].
+/// The `*.created` events can leave out fields that are only set later,
+/// which then decode as `None`.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
