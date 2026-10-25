@@ -381,6 +381,46 @@ async fn payments_get() {
 }
 
 #[tokio::test]
+async fn payments_list_with_and_without_stage() {
+    // A payment being retried, one from an API without the stage fields, and
+    // one with a stage this SDK doesn't know.
+    let body = r#"[
+        {"number":4,"status":"pending","amount":1000,"maxFee":20,"serviceFee":3,"actualFee":null,"address":"lnbc10u1p...","reference":null,"preimage":null,"txNumber":null,"failureReason":null,"createdAt":"2026-10-25T14:33:53+00:00","settledAt":null,"stage":"retrying","statusDetail":"Not sent yet; retrying for a few minutes. If it still can't be sent, it fails and the funds are released.","retryUntil":"2026-10-25T14:43:53+00:00"},
+        {"number":3,"status":"settled","amount":500,"maxFee":20,"serviceFee":1,"actualFee":2,"address":"x4k7m2@ln.bot","reference":null,"preimage":"9f2c...","txNumber":12,"failureReason":null,"createdAt":"2026-10-25T14:30:00+00:00","settledAt":"2026-10-25T14:30:01+00:00"},
+        {"number":5,"status":"processing","amount":1000,"maxFee":20,"serviceFee":3,"actualFee":null,"address":"x4k7m2@ln.bot","reference":null,"preimage":null,"txNumber":null,"failureReason":null,"createdAt":"2026-10-25T14:35:00+00:00","settledAt":null,"stage":"teleporting","statusDetail":"Moving through a new kind of route.","retryUntil":null}
+    ]"#;
+    let mut server = mockito::Server::new_async().await;
+    let mock = server
+        .mock("GET", "/v1/wallets/wal_1/payments")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(body)
+        .create_async()
+        .await;
+
+    let client = LnBot::new("key_test").with_base_url(server.url());
+    let list = client
+        .wallet("wal_1")
+        .payments()
+        .list(&ListParams::default())
+        .await
+        .unwrap();
+    assert_eq!(list.len(), 3);
+    assert_eq!(list[0].stage, Some(PaymentStage::Retrying));
+    assert_eq!(
+        list[0].retry_until.as_deref(),
+        Some("2026-10-25T14:43:53+00:00")
+    );
+    assert!(list[0].status_detail.is_some());
+    assert_eq!(list[1].stage, None);
+    assert_eq!(list[1].status_detail, None);
+    assert_eq!(list[1].retry_until, None);
+    assert_eq!(list[2].stage, Some(PaymentStage::Unknown));
+    assert_eq!(list[2].status, PaymentStatus::Processing);
+    mock.assert_async().await;
+}
+
+#[tokio::test]
 async fn payments_get_by_hash() {
     let mut server = mockito::Server::new_async().await;
     let mock = server

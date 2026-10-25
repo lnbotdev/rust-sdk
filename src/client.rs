@@ -76,6 +76,48 @@ impl LnBot {
         self.get("/v1/me").await
     }
 
+    /// Returns the service status right now: overall, per part (sending,
+    /// receiving, the node, webhooks), and any notice from the operators.
+    ///
+    /// Measured about once a minute. No authentication required, so it
+    /// works on an [`unauthenticated`](LnBot::unauthenticated) client. The
+    /// status calls share the API's limit for public routes, 10 requests a
+    /// minute per IP: over it they return [`LnBotError::Api`] with status 429.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # async fn example() -> Result<(), lnbot::LnBotError> {
+    /// use lnbot::{LnBot, ServiceState};
+    ///
+    /// let status = LnBot::unauthenticated().status().await?;
+    /// if status.status != ServiceState::Operational {
+    ///     println!("ln.bot is {}", status.status);
+    /// }
+    /// if let Some(notice) = &status.notice {
+    ///     println!("{}", notice.message);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn status(&self) -> Result<ServiceStatus, LnBotError> {
+        self.get("/v1/status").await
+    }
+
+    /// Returns the service status over time, for charts.
+    ///
+    /// `range` is `"24h"` (the API's default, 5-minute buckets), `"7d"`
+    /// (hourly), `"30d"` (6-hourly) or `"90d"` (daily). It is sent as is: a
+    /// range the API doesn't accept returns [`LnBotError::BadRequest`].
+    ///
+    /// A bucket with `samples == 0` wasn't measured: treat it as no data. No
+    /// authentication required, and the same limit as [`status`](LnBot::status)
+    /// applies.
+    pub async fn status_history(&self, range: &str) -> Result<ServiceStatusHistory, LnBotError> {
+        self.get_with_query("/v1/status/history", &[("range", range)])
+            .await
+    }
+
     /// Returns a wallet handle for the given wallet ID.
     ///
     /// All wallet-scoped operations go through this handle.

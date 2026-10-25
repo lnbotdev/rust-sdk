@@ -1,4 +1,4 @@
-use lnbot::{LnBot, LnBotError};
+use lnbot::{LnBot, LnBotError, ServiceState};
 
 // ---------------------------------------------------------------------------
 // Client construction
@@ -130,6 +130,140 @@ async fn me_with_wallet_key() {
     let resp = client.me().await.unwrap();
     assert_eq!(resp.wallet_id.as_deref(), Some("wal_1"));
     mock.assert_async().await;
+}
+
+// ---------------------------------------------------------------------------
+// Service status
+// ---------------------------------------------------------------------------
+
+const STATUS_LIVE: &str = include_str!("fixtures/status_live.json");
+const HISTORY_24H_LIVE: &str = include_str!("fixtures/status_history_24h.json");
+const HISTORY_90D: &str = include_str!("fixtures/status_history_90d.json");
+const TOO_MANY_REQUESTS: &str = r#"{"error":"Too many requests. Please try again later."}"#;
+
+#[tokio::test]
+async fn status_without_api_key() {
+    let mut server = mockito::Server::new_async().await;
+    let mock = server
+        .mock("GET", "/v1/status")
+        .match_header("authorization", mockito::Matcher::Missing)
+        .match_header("accept", "application/json")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_header("cache-control", "public, max-age=15")
+        .with_body(STATUS_LIVE)
+        .create_async()
+        .await;
+
+    let client = LnBot::unauthenticated().with_base_url(server.url());
+    let status = client.status().await.unwrap();
+    assert_eq!(status.status, ServiceState::Operational);
+    assert_eq!(status.components.node.latency_ms, Some(885));
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn status_history_without_api_key() {
+    let mut server = mockito::Server::new_async().await;
+    let mock = server
+        .mock("GET", "/v1/status/history")
+        .match_header("authorization", mockito::Matcher::Missing)
+        .match_query(mockito::Matcher::UrlEncoded("range".into(), "24h".into()))
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(HISTORY_24H_LIVE)
+        .create_async()
+        .await;
+
+    let client = LnBot::unauthenticated().with_base_url(server.url());
+    let history = client.status_history("24h").await.unwrap();
+    assert_eq!(history.range, "24h");
+    assert_eq!(history.buckets.len(), 289);
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn status_history_sends_range() {
+    let mut server = mockito::Server::new_async().await;
+    let mock = server
+        .mock("GET", "/v1/status/history")
+        .match_query(mockito::Matcher::Regex("^range=90d$".into()))
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(HISTORY_90D)
+        .create_async()
+        .await;
+
+    let client = LnBot::unauthenticated().with_base_url(server.url());
+    let history = client.status_history("90d").await.unwrap();
+    assert_eq!(history.bucket_seconds, 86400);
+    assert_eq!(history.buckets.len(), 3);
+    assert_eq!(history.buckets[2].samples, 0);
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn status_history_passes_any_range_through() {
+    let mut server = mockito::Server::new_async().await;
+    let mock = server
+        .mock("GET", "/v1/status/history")
+        .match_query(mockito::Matcher::UrlEncoded(
+            "range".into(),
+            "1 year&more".into(),
+        ))
+        .with_status(400)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"error":"range must be 24h, 7d, 30d or 90d."}"#)
+        .create_async()
+        .await;
+
+    let client = LnBot::unauthenticated().with_base_url(server.url());
+    let err = client.status_history("1 year&more").await.unwrap_err();
+    match err {
+        LnBotError::BadRequest { body } => {
+            assert!(body.contains("range must be 24h, 7d, 30d or 90d."))
+        }
+        other => panic!("expected BadRequest, got {:?}", other),
+    }
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn status_calls_surface_429() {
+    let mut server = mockito::Server::new_async().await;
+    server
+        .mock("GET", "/v1/status")
+        .with_status(429)
+        .with_header("content-type", "application/json")
+        .with_body(TOO_MANY_REQUESTS)
+        .create_async()
+        .await;
+    server
+        .mock("GET", "/v1/status/history")
+        .match_query(mockito::Matcher::Any)
+        .with_status(429)
+        .with_header("content-type", "application/json")
+        .with_body(TOO_MANY_REQUESTS)
+        .create_async()
+        .await;
+
+    let client = LnBot::unauthenticated().with_base_url(server.url());
+    let errors = [
+        client.status().await.unwrap_err(),
+        client.status_history("7d").await.unwrap_err(),
+    ];
+    for err in errors {
+        assert!(err
+            .to_string()
+            .contains("Too many requests. Please try again later."));
+        match err {
+            LnBotError::Api { status, body } => {
+                assert_eq!(status, 429);
+                assert_eq!(body, TOO_MANY_REQUESTS);
+            }
+            other => panic!("expected Api, got {:?}", other),
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

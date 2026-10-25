@@ -93,6 +93,12 @@ impl PaymentsResource<'_> {
     /// [`Failed`](PaymentEventType::Failed), or
     /// [`Timeout`](PaymentEventType::Timeout) with the payment's current state
     /// when `timeout` seconds pass first (default 60, maximum 300).
+    ///
+    /// The event's `data` carries [`stage`](PaymentResponse::stage),
+    /// [`status_detail`](PaymentResponse::status_detail) and
+    /// [`retry_until`](PaymentResponse::retry_until) too, but no event is
+    /// sent when only the stage changes: read the payment with
+    /// [`get`](Self::get) to follow it.
     pub fn watch(
         &self,
         number: i32,

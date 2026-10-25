@@ -9,6 +9,12 @@ const PAYMENT_FAILED: &str = r#"{"number":3,"status":"failed","amount":20,"max_f
 
 const PAYMENT_PROCESSING: &str = r#"{"number":1,"status":"processing","amount":20,"max_fee":5,"service_fee":1,"actual_fee":null,"address":"bub@bub.gg","reference":null,"preimage":null,"tx_number":null,"failure_reason":null,"created_at":"2026-10-24T14:50:01Z","settled_at":null}"#;
 
+// A payment in flight, as the `timeout` event of the payment stream sends it.
+const PAYMENT_IN_FLIGHT: &str = r#"{"number":4,"status":"processing","amount":1000,"max_fee":20,"service_fee":3,"actual_fee":null,"address":"lnbc10u1p...","reference":null,"preimage":null,"tx_number":null,"failure_reason":null,"created_at":"2026-10-25T14:33:53+00:00","settled_at":null,"stage":"in_flight","status_detail":"Sent; the Lightning network is completing it, usually within seconds.","retry_until":null}"#;
+
+// The same payment while it was retried, with `retry_until` set.
+const PAYMENT_RETRYING: &str = r#"{"number":4,"status":"pending","amount":1000,"max_fee":20,"service_fee":3,"actual_fee":null,"address":"lnbc10u1p...","reference":null,"preimage":null,"tx_number":null,"failure_reason":null,"created_at":"2026-10-25T14:33:53+00:00","settled_at":null,"stage":"retrying","status_detail":"Not sent yet; retrying for a few minutes. If it still can't be sent, it fails and the funds are released.","retry_until":"2026-10-25T14:43:53+00:00"}"#;
+
 // `payment.created` on the wallet stream leaves out the fields set later.
 const PAYMENT_CREATED: &str = r#"{"number":2,"status":"pending","amount":20,"max_fee":5,"service_fee":1,"address":"bub@bub.gg","reference":null,"created_at":"2026-10-24T14:50:01Z"}"#;
 
@@ -528,6 +534,82 @@ async fn payment_watch_timeout_event() {
     assert_eq!(events[0].data.status, PaymentStatus::Processing);
     assert_eq!(events[0].data.max_fee, 5);
     assert_eq!(events[0].data.actual_fee, None);
+    // A payload from before the stage fields still decodes.
+    assert_eq!(events[0].data.stage, None);
+    assert_eq!(events[0].data.status_detail, None);
+    assert_eq!(events[0].data.retry_until, None);
+}
+
+#[tokio::test]
+async fn payment_watch_timeout_event_has_stage_fields() {
+    let mut server = mockito::Server::new_async().await;
+    server
+        .mock("GET", "/v1/wallets/wal_1/payments/4/events?timeout=5")
+        .with_status(200)
+        .with_header("content-type", "text/event-stream")
+        .with_body(format!("event: timeout\ndata: {PAYMENT_IN_FLIGHT}\n\n"))
+        .create_async()
+        .await;
+
+    let client = LnBot::new("key_test").with_base_url(server.url());
+    let events: Vec<PaymentEvent> = client
+        .wallet("wal_1")
+        .payments()
+        .watch(4, Some(5))
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].event, PaymentEventType::Timeout);
+    let p = &events[0].data;
+    assert_eq!(p.status, PaymentStatus::Processing);
+    assert_eq!(p.stage, Some(PaymentStage::InFlight));
+    assert_eq!(
+        p.status_detail.as_deref(),
+        Some("Sent; the Lightning network is completing it, usually within seconds.")
+    );
+    assert_eq!(p.retry_until, None);
+    assert_eq!(p.max_fee, 20);
+    assert_eq!(p.service_fee, 3);
+    assert_eq!(p.created_at.as_deref(), Some("2026-10-25T14:33:53+00:00"));
+}
+
+#[tokio::test]
+async fn payment_watch_timeout_event_has_retry_until() {
+    let mut server = mockito::Server::new_async().await;
+    server
+        .mock("GET", "/v1/wallets/wal_1/payments/4/events")
+        .with_status(200)
+        .with_header("content-type", "text/event-stream")
+        .with_body(format!("event: timeout\ndata: {PAYMENT_RETRYING}\n\n"))
+        .create_async()
+        .await;
+
+    let client = LnBot::new("key_test").with_base_url(server.url());
+    let events: Vec<PaymentEvent> = client
+        .wallet("wal_1")
+        .payments()
+        .watch(4, None)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].event, PaymentEventType::Timeout);
+    let p = &events[0].data;
+    assert_eq!(p.status, PaymentStatus::Pending);
+    assert_eq!(p.stage, Some(PaymentStage::Retrying));
+    assert!(p
+        .status_detail
+        .as_deref()
+        .unwrap()
+        .starts_with("Not sent yet; retrying"));
+    assert_eq!(p.retry_until.as_deref(), Some("2026-10-25T14:43:53+00:00"));
 }
 
 #[tokio::test]

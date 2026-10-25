@@ -99,9 +99,9 @@ w.payments().create(
 ).await?;
 ```
 
-Leave `max_fee` unset. The server caps the network fee (Spark's 0.25% plus Lightning routing) at 1% of the amount, minimum 20 sats, and holds only the fee estimate plus a small buffer while the payment is in flight. On success the wallet is debited `amount + actual_fee + service_fee`, where `service_fee` is 0.25% (minimum 1 sat). Both fees are 0 between ln.bot wallets. Set `.max_fee(n)` only to allow a higher fee: it accepts 1 up to the larger of 10,000 sats and 5% of the amount.
+Leave `max_fee` unset. The server caps the network fee (0.25% plus Lightning routing) at 1% of the amount, minimum 20 sats, and holds only the fee estimate plus a small buffer while the payment is in flight. On success the wallet is debited `amount + actual_fee + service_fee`, where `service_fee` is 0.25% (minimum 1 sat). Both fees are 0 between ln.bot wallets. Set `.max_fee(n)` only to allow a higher fee: it accepts 1 up to the larger of 10,000 sats and 5% of the amount.
 
-A payment can stay `pending` for a while because it is retried automatically. It ends up `settled` or `failed`: failed with `Invoice expired before it could be paid.` if the invoice expires first, otherwise within 24 hours at most. A failing payment can also stay `processing` a few seconds before it turns `failed`. Use `w.payments().watch(number, None)` or the wallet event stream to follow it.
+A payment can stay `pending` for a while because it is retried automatically. It ends up `settled` or `failed`: failed with `Invoice expired before it could be paid.` if the invoice expires first, otherwise within 24 hours at most. A failing payment can also stay `processing` a few seconds before it turns `failed`. Use `w.payments().watch(number, None)` or the wallet event stream to follow it. Its `stage` and `status_detail` say what is happening meanwhile: see [Payment stages](#payment-stages).
 
 ### Check balance
 
@@ -151,6 +151,72 @@ Both calls return `LnBotError::BadRequest` when the target can't be paid. The bo
 
 ---
 
+## Payment stages
+
+Every payment returned by `create`, `get` and `list` carries `stage`, `status_detail` and `retry_until`. `stage` says where the payment is, more precisely than `status`, and `status_detail` is a sentence to show your user as is.
+
+| `stage` | With `status` | `status_detail` |
+|---------|---------------|-----------------|
+| `Queued` (`queued`) | `Pending` | Waiting to be sent. |
+| `Retrying` (`retrying`) | `Pending` | Not sent yet; retrying for a few minutes. If it still can't be sent, it fails and the funds are released. |
+| `Sending` (`sending`) | `Pending` or `Processing` | Being sent. Between ln.bot wallets: Being transferred to the recipient's wallet. |
+| `InFlight` (`in_flight`) | `Processing` | Sent; the Lightning network is completing it, usually within seconds. |
+| `Confirming` (`confirming`) | `Processing` | Checking with the Lightning network whether it went out. The funds stay on hold until then. |
+| `OnHold` (`on_hold`) | `Processing` | Interrupted by an earlier version of the service and on hold until it is reviewed. The funds are held, not lost. |
+| `Settled` (`settled`) | `Settled` | `None` |
+| `Failed` (`failed`) | `Failed` | The `failure_reason` |
+
+```rust
+use lnbot::PaymentStage;
+
+let p = w.payments().get(number).await?;
+if let Some(detail) = &p.status_detail {
+    println!("{detail}");
+}
+if p.stage == Some(PaymentStage::Retrying) {
+    println!("retried until {}", p.retry_until.as_deref().unwrap_or("soon"));
+}
+```
+
+More stages may be added. One this SDK doesn't know is `PaymentStage::Unknown`, and an API that doesn't send the field gives `None`: in both cases, go by `status`. A payment can go from `Processing` back to `Pending` when it is retried, so treat both as in progress. `retry_until` is only set while the stage is `Retrying`: if the payment still can't be sent by then, it fails within about a minute and the funds are released.
+
+The events of `w.payments().watch` carry the same fields, but the stream sends nothing when only the stage changes: it ends with `Settled`, `Failed` or `Timeout`. Webhooks and the wallet event stream don't carry a stage.
+
+---
+
+## Service status
+
+Two public calls say whether ln.bot is working, measured about once a minute. They need no API key (sending one does no harm), so an unauthenticated client works.
+
+```rust
+use lnbot::{LnBot, ServiceState};
+
+let client = LnBot::unauthenticated();
+
+let status = client.status().await?;
+if status.status != ServiceState::Operational {
+    println!("ln.bot is {}", status.status);
+}
+if let Some(notice) = &status.notice {
+    println!("{}", notice.message);
+}
+println!("{} payments in progress", status.components.sending.in_progress);
+
+let history = client.status_history("7d").await?;
+for bucket in history.buckets.iter().filter(|b| b.samples > 0) {
+    let up = bucket.samples - bucket.overall.degraded - bucket.overall.outage;
+    println!("{} {:.1}%", bucket.at, 100.0 * up as f64 / bucket.samples as f64);
+}
+```
+
+`status` is `Operational`, `Degraded`, `Outage` or `Unknown` (nothing measured for 5 minutes, so the numbers are as old as `updated_at`), overall and for each part in `components`: `sending` (payments out), `receiving` (payments in), `node` (the Lightning node) and `webhooks` (deliveries). `sending.by_stage` counts the payments in progress by [stage](#payment-stages), keyed as the API sends it (`in_flight`), and leaves out stages with none. A notice from the operators has a `level` of `Info`, `Warning` or `Outage` and a `message` to show as is. More states and levels may be added: one this SDK doesn't know comes back as `ServiceState::Other` or `NoticeLevel::Other`, with the value as sent.
+
+`status_history` takes `"24h"` (5-minute buckets, the API's default), `"7d"` (hourly), `"30d"` (6-hourly) or `"90d"` (daily); any other value returns `LnBotError::BadRequest`. Buckets are aligned to UTC and the last one is still filling, so don't assume how many there are. A bucket with `samples == 0` wasn't measured, and its percentiles and gauges are `None`: treat it as no data, not as up or down. `summary` covers the whole range, with `uptime` in percent of measured time.
+
+Both calls share the API's limit for public routes, 10 requests a minute per IP. Over it they return `LnBotError::Api { status: 429, body }`, with the API's message in `body`.
+
+---
+
 ## Wallet-scoped API
 
 All wallet operations go through a `Wallet` handle obtained via `client.wallet(wallet_id)`:
@@ -178,6 +244,8 @@ Account-level operations stay on the client:
 ```rust
 client.register()                      // Register new account
 client.me()                            // Get authenticated identity
+client.status()                        // Service status now (no key needed)
+client.status_history("24h")           // Service status over time (no key needed)
 client.wallets().create()              // Create wallet
 client.wallets().list()                // List wallets
 client.keys().rotate(0)                // Rotate account key
@@ -229,6 +297,8 @@ match w.invoices().get(999).await {
 }
 ```
 
+Other statuses come back as `LnBotError::Api { status, body }`, such as 429 when a rate limit is hit.
+
 ## Configuration
 
 ```rust
@@ -245,7 +315,7 @@ let client = LnBot::new("uk_...")
 - **Async-first** -- built on `reqwest` + `tokio`
 - **Wallet-scoped API** -- `client.wallet(id)` returns a typed scope with all sub-resources
 - **Strongly typed** -- every request/response is a Rust struct with `serde` derives
-- **Typed enums** -- `InvoiceStatus`, `PaymentStatus`, `TransactionType` are real enums, not strings
+- **Typed enums** -- `InvoiceStatus`, `PaymentStatus`, `PaymentStage`, `TransactionType`, `ServiceState` are real enums, not strings
 - **SSE streaming** -- `watch` returns a `Stream` of typed events
 - **Typed errors** -- `LnBotError` enum with `BadRequest`, `NotFound`, `Conflict` variants
 - **Forward-compatible** -- `#[non_exhaustive]` and `#[serde(other)]` for safe API evolution

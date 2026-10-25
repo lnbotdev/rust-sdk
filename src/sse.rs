@@ -63,6 +63,8 @@ mod tests {
         assert_eq!(camel_case("max_fee".into()), "maxFee");
         assert_eq!(camel_case("failure_reason".into()), "failureReason");
         assert_eq!(camel_case("tx_number".into()), "txNumber");
+        assert_eq!(camel_case("status_detail".into()), "statusDetail");
+        assert_eq!(camel_case("retry_until".into()), "retryUntil");
         assert_eq!(camel_case("a_b_c".into()), "aBC");
     }
 
@@ -94,7 +96,7 @@ mod tests {
 
     #[test]
     fn camel_case_keys_leaves_values_alone() {
-        let value = json!({ "status": "snake_case_value", "memo": "a_b" });
+        let value = json!({ "status": "snake_case_value", "memo": "a_b", "stage": "in_flight" });
         assert_eq!(camel_case_keys(value.clone()), value);
     }
 }
