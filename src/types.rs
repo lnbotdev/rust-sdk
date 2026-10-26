@@ -804,7 +804,8 @@ pub struct CreatePaymentRequest {
     pub amount: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub idempotency_key: Option<String>,
-    /// Maximum network fee in sats: 0.25% plus Lightning routing.
+    /// Maximum network fee in sats: the Lightning routing, on top of the 0.25%
+    /// service fee.
     ///
     /// Leave this unset unless you need a different cap. The server then uses
     /// its default of 1% of the amount, minimum 20 sats. When set, it must be
@@ -873,8 +874,8 @@ pub struct PaymentResponse {
     pub max_fee: i64,
     /// Service fee in sats: 0.25%, minimum 1 sat. 0 for internal transfers.
     pub service_fee: i64,
-    /// Network fee actually charged in sats (0.25% plus routing).
-    /// `None` until the payment settles.
+    /// Network fee actually charged in sats: the Lightning routing (the 0.25%
+    /// service fee is separate). `None` until the payment settles.
     pub actual_fee: Option<i64>,
     pub address: String,
     pub reference: Option<String>,
@@ -927,9 +928,8 @@ pub struct ResolveTargetResponse {
     pub amount: Option<i64>,
     /// True when the recipient is a wallet on ln.bot: a free internal transfer.
     pub internal: bool,
-    /// Estimated network fee in sats (0.25% plus routing). `None`
-    /// without an amount or when no estimate is available. 0 for internal
-    /// transfers.
+    /// Estimated network fee in sats: the Lightning routing. `None` without an
+    /// amount or when no estimate is available. 0 for internal transfers.
     pub network_fee_estimate: Option<i64>,
     /// Service fee in sats: 0.25%, minimum 1 sat. 0 for internal transfers.
     /// `None` without an amount.
@@ -1253,9 +1253,9 @@ pub struct VerifyL402Response {
 #[serde(rename_all = "camelCase")]
 pub struct PayL402Request {
     pub www_authenticate: String,
-    /// Maximum network fee in sats (0.25% plus Lightning routing).
-    /// Leave it `None` to use the server default of 1% of the amount, minimum
-    /// 20 sats. Same meaning and limits as
+    /// Maximum network fee in sats: the Lightning routing, on top of the 0.25%
+    /// service fee. Leave it `None` to use the server default of 1% of the
+    /// amount, minimum 20 sats. Same meaning and limits as
     /// [`CreatePaymentRequest::max_fee`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_fee: Option<i64>,
@@ -1274,8 +1274,8 @@ pub struct L402PayResponse {
     pub payment_hash: String,
     pub preimage: Option<String>,
     pub amount: i64,
-    /// Network fee actually charged in sats (0.25% plus routing).
-    /// `None` until the payment settles.
+    /// Network fee actually charged in sats: the Lightning routing (the 0.25%
+    /// service fee is separate). `None` until the payment settles.
     pub fee: Option<i64>,
     pub payment_number: i32,
     pub status: String,
